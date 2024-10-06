@@ -1,0 +1,5 @@
+yt-dlp -f - https://www.youtube.com/watch?v=IuluZVBz5aM
+
+
+-- Re-encode ts to mp4 H.264?
+ffmpeg -i input.ts -c:v libx264 -c:a aac output.mp4
