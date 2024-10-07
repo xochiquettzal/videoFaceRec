@@ -1,5 +1,6 @@
 import face_recognition
-
+import cv2
+from cv2 import cuda
 
 class FaceRecognizer:
     def __init__(self, photo_path):
@@ -8,6 +9,7 @@ class FaceRecognizer:
         self.person_encoding = face_recognition.face_encodings(self.person_image)[0]
 
     def compare_faces(self, frame):
+        # Frame üzerinde yüz tespiti yapmadan önce numpy dizisine dönüştür
         face_locations = face_recognition.face_locations(frame)
         face_encodings = face_recognition.face_encodings(frame, face_locations)
         matches = []

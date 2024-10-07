@@ -2,10 +2,10 @@ import os
 import sys
 import time
 import cv2
+from cv2 import cuda
 from face_recognizer import FaceRecognizer
 from video_processor import VideoProcessor
 from image_saver import ImageSaver
-
 
 class FaceDetectionApp:
     def __init__(self, photo_path, video_path):
@@ -31,34 +31,51 @@ class FaceDetectionApp:
                 frame_number += 1
                 continue
 
-            # Çözünürlüğü çeyreğe indir
-            frame = cv2.resize(frame, (frame.shape[1] // 8, frame.shape[0] // 8))
+            # CUDA GpuMat'e yükle
+            frame_cuda = cuda.GpuMat()
+            frame_cuda.upload(frame)
 
-            face_locations, matches = self.face_recognizer.compare_faces(frame)
+            # Çözünürlük küçültme işlemini kaldırdık
+            scales = [1.0, 0.75, 0.5, 0.25]
+            detected = False
 
-            for match in matches:
-                if match:
-                    time_in_video = frame_number / self.video_processor.fps
-                    self.found_times.append(time_in_video)
-                    print(f"Yüz bulundu! Zaman: {time_in_video:.2f} saniye")
+            for scale in scales:
+                # Frame boyutunu yeniden boyutlandır
+                scaled_frame_cuda = cuda.GpuMat()
+                scaled_frame_cuda.upload(cv2.resize(frame, None, fx=scale, fy=scale, interpolation=cv2.INTER_LINEAR))
 
-                    # 4x upscale yap ve piksel düzeltme
-                    upscaled_frame = cv2.resize(frame, None, fx=4, fy=4, interpolation=cv2.INTER_LINEAR)
+                # GPU'dan indirerek numpy dizisine dönüştür
+                scaled_frame_np = scaled_frame_cuda.download()
 
-                    # Yüzleri pikselleri düzeltme işlemi
-                    # Burada bir işlem uygulamak için bir fonksiyon tanımlamanız gerekebilir
-                    corrected_frame = self.correct_pixels(upscaled_frame)
+                # Yüzleri tespit et
+                face_locations, matches = self.face_recognizer.compare_faces(scaled_frame_np)
 
-                    self.image_saver.save_image(corrected_frame, self.video_name, time_in_video)
+                for match in matches:
+                    if match:
+                        time_in_video = frame_number / self.video_processor.fps
+                        self.found_times.append(time_in_video)
+                        print(f"Yüz bulundu! Zaman: {time_in_video:.2f} saniye")
 
-                    frame_number += self.video_processor.skip_frames
-                    self.video_processor.video_capture.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
+                        original_size_frame_cuda = cuda.GpuMat()
+                        original_size_frame_cuda.upload(cv2.resize(scaled_frame_np, (frame.shape[1], frame.shape[0]),interpolation=cv2.INTER_LINEAR))
+
+                        # Gaussian blur ile düzeltmeyi kaldırdık
+                        corrected_frame = original_size_frame_cuda.download()  # GpuMat'i numpy dizisine indiriyoruz
+
+                        # Yüksek çözünürlüklü görseli kaydet
+                        self.image_saver.save_image(corrected_frame, self.video_name, time_in_video)
+
+                        frame_number += self.video_processor.skip_frames
+                        self.video_processor.video_capture.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
+                        detected = True
+                        break
+
+                if detected:
                     break
 
             processed_frames = frame_number + 1
             estimated_time_left = self.video_processor.get_remaining_time(processed_frames)
 
-            # Saat:Dakika:Saniye formatına dönüştür
             hours = int(estimated_time_left // 3600)
             minutes = int((estimated_time_left % 3600) // 60)
             seconds = int(estimated_time_left % 60)
@@ -71,15 +88,10 @@ class FaceDetectionApp:
         self.video_processor.release()
         self.display_found_times()
 
-    def correct_pixels(self, frame):
-        # Burada pikselleri düzeltmek için uygun bir yöntem uygulayın.
-        # Örneğin, gauss bulanıklığı veya başka bir filtre uygulanabilir.
-        return cv2.GaussianBlur(frame, (5, 5), 0)
-
     def display_found_times(self):
         print("\nKişi şu zamanlarda bulundu:")
         for time in self.found_times:
             hours = int(time // 3600)
             minutes = int((time % 3600) // 60)
             seconds = int(time % 60)
-            print(f"{hours}:{minutes:02}:{seconds:02} ")
+            print(f"{hours}:{minutes:02}:{seconds:02}")
