@@ -1,5 +1,5 @@
 import cv2
-import numpy as np
+from deepface import DeepFace
 
 
 class FaceRecognizer:
@@ -16,6 +16,7 @@ class FaceRecognizer:
             5000
         )
 
+        # Load the reference image (photo_path)
         self.person_image = cv2.imread(photo_path)
         self.person_encoding = self.get_face_encoding(self.person_image)
 
@@ -28,11 +29,12 @@ class FaceRecognizer:
         if faces is not None and len(faces) > 0:
             # Yunet detect() output might contain more than 5 values
             x, y, w, h = faces[0][:4].astype(int)  # Extract only x, y, width, and height
-            face_roi = image[y:y+h, x:x+w]
-            return face_roi  # Burada uygun encoding algoritmasını uygulayın
+            face_roi = image[y:y + h, x:x + w]
+            return face_roi  # Return the face region as the encoding for comparison
         return None
 
     def compare_faces(self, frame):
+
         # Yunet ile yüz tespiti yap
         h, w = frame.shape[:2]
         self.face_detector.setInputSize((w, h))
@@ -57,6 +59,18 @@ class FaceRecognizer:
         return face_locations, matches
 
     def compare_face_encoding(self, face_roi):
-        # Burada 'self.person_encoding' ile karşılaştırma yapmalısınız
-        # Yüz kodlaması için uygun bir karşılaştırma metodu ekleyin
-        return True if face_roi is not None else False
+        # Burada DeepFace kullanarak karşılaştırma yapıyoruz
+        try:
+            if face_roi is not None and self.person_encoding is not None:
+                # Save the detected face to a temporary file for comparison
+                cv2.imwrite("temp_face.jpg", face_roi)
+
+                # Use DeepFace for face comparison
+                result = DeepFace.verify(img1_path="temp_face.jpg", img2_path="rsrc/photos/person_photo.jpg",
+                                         enforce_detection=False)
+
+                # Return whether the faces match
+                return result["verified"]
+        except Exception as e:
+            print(f"Karşılaştırma hatası: {e}")
+        return False

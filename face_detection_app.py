@@ -27,7 +27,7 @@ class FaceDetectionApp:
             if not ret:
                 break
 
-            if frame_number % 50 != 0:
+            if frame_number % 75 != 0:
                 frame_number += 1
                 continue
 
@@ -36,7 +36,7 @@ class FaceDetectionApp:
             frame_cuda.upload(frame)
 
             # Çözünürlük küçültme işlemini kaldırdık
-            scales = [1.0, 0.75, 0.5, 0.25]
+            scales = [0.25, 0.5, 0.75, 1]
             detected = False
 
             for scale in scales:
@@ -57,15 +57,16 @@ class FaceDetectionApp:
                         print(f"Yüz bulundu! Zaman: {time_in_video:.2f} saniye")
 
                         original_size_frame_cuda = cuda.GpuMat()
-                        original_size_frame_cuda.upload(cv2.resize(scaled_frame_np, (frame.shape[1], frame.shape[0]),interpolation=cv2.INTER_LINEAR))
+                        original_size_frame_cuda.upload(cv2.resize(scaled_frame_np, (frame.shape[1], frame.shape[0]),
+                                                                   interpolation=cv2.INTER_LINEAR))
 
-                        # Gaussian blur ile düzeltmeyi kaldırdık
-                        corrected_frame = original_size_frame_cuda.download()  # GpuMat'i numpy dizisine indiriyoruz
+                        corrected_frame = original_size_frame_cuda.download()
 
-                        # Yüksek çözünürlüklü görseli kaydet
+                        # Görseli kaydet
                         self.image_saver.save_image(corrected_frame, self.video_name, time_in_video)
 
-                        frame_number += self.video_processor.skip_frames
+                        # Yüz bulundu, 250 frame atla
+                        frame_number += 250
                         self.video_processor.video_capture.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
                         detected = True
                         break
